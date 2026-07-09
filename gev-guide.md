@@ -36,3 +36,8 @@ Install Packages
   Swagger
 
   npm install @nestjs/swagger swagger-ui-express 
+
+
+
+  main.ts: এটি প্রজেক্টের এন্ট্রি পয়েন্ট। এর কাজ হলো অ্যাপ্লিকেশনটি স্টার্ট বা রান করা।
+  app.module.ts: এটি অ্যাপ্লিকেশনের রুট মডিউল (Root Module)। এটি পুরো প্রজেক্টের সব মডিউল ও সার্ভিসকে একসাথে যুক্ত করে।

@@ -10,9 +10,10 @@ async function bootstrap() {
   // Logger.log(`Server is running on http://localhost:${port}`, 'Bootstrap');
 
   Logger.log(`School ERP API started successfully`, 'Bootstrap');
-  Logger.log(`Environment : ${process.env.NODE_ENV || 'development'}`, 'Bootstrap');
+  Logger.log(
+    `Environment : ${process.env.NODE_ENV || 'development'}`,
+    'Bootstrap',
+  );
   Logger.log(`Listening on : http://localhost:${port}`, 'Bootstrap');
-
-
 }
 bootstrap();
