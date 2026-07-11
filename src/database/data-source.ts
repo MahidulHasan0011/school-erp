@@ -10,7 +10,12 @@ export const dataSourceOptions: DataSourceOptions = {
   ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false },
   // Glob the compiled/ts entities and migrations
   entities: [__dirname + '/../modules/**/entities/*.entity{.ts,.js}'],
-  migrations: [__dirname + '/migrations/*{.ts,.js}'],
+  // migrations/ = টেবিল/schema, views/ = CREATE VIEW migration — দুটোই একই
+  // migrations টেবিলে track হয়; timestamp দিয়ে order হয় (folder-নিরপেক্ষ)।
+  migrations: [
+    __dirname + '/migrations/*{.ts,.js}',
+    __dirname + '/views/*{.ts,.js}',
+  ],
   synchronize: false, // CLI/migrations must never auto-sync
   logging: process.env.DB_LOGGING === 'true',
 };

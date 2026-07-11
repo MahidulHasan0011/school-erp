@@ -25,6 +25,8 @@ export interface PaginationMeta {
   limit: number;
   total: number;
   totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
 }
 
 export class PaginatedResponseDto<T> {
