@@ -6,6 +6,7 @@ import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
 import storageConfig from './config/storage.config';
+import { RedisModule } from './common/redis/redis.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 
@@ -29,6 +30,7 @@ import { UsersModule } from './modules/users/users.module';
         synchronize: false,
       }),
     }),
+    RedisModule,
     UsersModule,
     AuthModule,
   ],

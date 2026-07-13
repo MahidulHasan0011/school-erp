@@ -5,9 +5,12 @@ import {
   DeleteDateColumn,
   Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { Role } from '../../roles/entities/role.entity';
 
 export enum Gender {
   MALE = 'MALE',
@@ -41,6 +44,11 @@ export class User {
   @ApiPropertyOptional()
   @Column({ name: 'role_id', type: 'uuid', nullable: true })
   roleId: string | null;
+
+  // Read-only relation; the FK is owned by the roleId column above.
+  @ManyToOne(() => Role)
+  @JoinColumn({ name: 'role_id' })
+  role?: Role | null;
 
   @ApiProperty({ default: true })
   @Column({ name: 'is_active', type: 'boolean', default: true, nullable: true })

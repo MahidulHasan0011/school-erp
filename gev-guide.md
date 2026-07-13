@@ -299,3 +299,287 @@ Guard = অনুমতি আছে কি না দেখে
 Pipe = ডেটা ঠিক আছে কি না যাচাই করে
 Interceptor = ক্যামেরাম্যান 📹 — Request শুরু হওয়ার সময়ও দেখে, Response শেষ হওয়ার সময়ও দেখে; চাইলে Response পরিবর্তনও করতে পারে।
 Exception Filter = Error হলে সেটি সুন্দরভাবে Handle করে
+
+
+
+
+
+
+প্রথমে Entity কী?
+
+এক লাইনের সংজ্ঞা:
+
+Entity হলো Database Table-এর TypeScript Class।
+
+অর্থাৎ,
+
+Database-এ যদি একটি Table থাকে, তাহলে TypeORM-এ সেই Table-কে একটি Class দিয়ে represent করা হয়। সেই Class-ই Entity।
+
+উদাহরণ
+
+ধরি Database-এ একটি Table আছে।
+students
+
+--------------------------------
+id
+name
+email
+age
+created_at
+
+
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+
+@Entity('students')
+export class Student {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column()
+  name: string;
+
+  @Column()
+  email: string;
+
+  @Column()
+  age: number;
+}
+
+
+@Entity('students')
+মানে, এই Class-এর Data students Table-এ থাকবে।
+
+
+কেন Entity ব্যবহার করি?
+
+TypeORM-এর মূল উদ্দেশ্য হলো, SQL না লিখে Object দিয়ে Database-এর সাথে কাজ করা।
+
+আগে (Raw SQL)
+SELECT * FROM students;
+
+TypeORM
+studentRepository.find();
+
+দেখো, SQL লিখতে হলো না।
+
+
+
+একটা বাস্তব উদাহরণ
+students
+
+id
+name
+age
+
+
+Raw SQL
+INSERT INTO students(name, age)
+VALUES('Mahid', 20);
+
+
+TypeORM
+const student = new Student();
+
+student.name = 'Mahid';
+student.age = 20;
+
+await studentRepository.save(student);
+
+
+
+Entity কেন Class?
+
+কারণ TypeScript Object নিয়ে কাজ করতে পারে।
+
+তুমি,  student.name লিখতে পারো। SQL-এ এটা সম্ভব না।
+
+
+
+Entity কোথায় ব্যবহার হয়? প্রায় সব জায়গায়।
+
+Controller
+
+↓
+
+Service
+
+↓
+
+Repository
+
+↓
+
+Entity
+
+↓
+
+Database
+
+
+CCREATE ex,
+ const student = repository.create({
+  name: 'Mahid',
+  age: 20,
+});
+
+await repository.save(student);
+
+Read ex, 
+const students = await repository.find();
+
+Update ex,
+
+const student = await repository.findOneBy({ id });
+student.name = 'Hasan';
+await repository.save(student);
+
+
+Delete ex,
+await repository.delete(id);  সব জায়গায় Entity ব্যবহার হচ্ছে।
+
+
+@Entity() কী?
+
+@Entity('students')
+
+
+মানে
+
+এই Class
+
+↓
+
+Map হবে
+
+↓
+students  Table-এর সাথে।
+
+
+@Column() কী?
+
+@Column()
+name: string; মানে Database-এ name Column আছে।
+
+
+@PrimaryGeneratedColumn()
+
+@PrimaryGeneratedColumn('uuid')
+id: string;   মানে Primary Key এবং UUID Auto Generate হবে।
+
+
+@CreateDateColumn()
+
+@CreateDateColumn()
+createdAt: Date;  Save করলে 2026-07-13 দিয়ে দেবে।
+
+@UpdateDateColumn()  Update করলে নিজেই Update Time বসাবে।
+
+
+@DeleteDateColumn()  Soft Delete-এর জন্য। deleted_at ফাঁকা থাকলে Alive NULL Delete করলে 2026-07-13
+
+
+
+Entity না থাকলে কী হবে? 
+তাহলে TypeORM কাজই করতে পারবে না। কারণ TypeORM-এর প্রথম কাজ হলো,
+
+Entity
+↓
+Database Mapping
+
+Entity ছাড়া সে জানবেই না
+students Table কোথায়?
+কোন Column?
+Primary Key কী?
+Relation কী?
+
+
+Entity-তে শুধু Database Structure রাখবে।
+
+Table name @Entity()
+Column @Column()
+Relation @ManyToOne() @OneToMany()
+Index @Index()
+Unique @Unique()
+
+
+সহজে মনে রাখার কৌশল
+
+Database Table = Entity Class
+Database Table
+        ⇅
+      Entity
+        ⇅
+   Repository
+        ⇅
+     Service
+        ⇅
+   Controller
+
+তোমার জন্য এক লাইনের সূত্র Entity হলো TypeORM-এর "Bridge" (সেতু), যা TypeScript Object এবং Database Table-কে একসাথে যুক্ত করে।
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Strategy কী?
+
+এক লাইনের সংজ্ঞা:
+
+Strategy হলো কোনো নির্দিষ্ট কাজ করার একটি নিয়ম বা পদ্ধতি (algorithm)।
+
+সহজ বাংলায়,
+
+একই কাজ বিভিন্ন উপায়ে করা যায়। সেই প্রতিটি উপায়ই একটি Strategy।
+
+বাস্তব উদাহরণ
+
+ধরো তুমি ঢাকা থেকে রাজশাহী যাবে।
+
+তুমি যেতে পারো
+
+🚌 Bus
+🚆 Train
+✈️ Plane
+🚗 Car
+
+গন্তব্য একই।
+
+কিন্তু যাওয়ার পদ্ধতি আলাদা।
+
+এগুলোকেই Strategy বলা যায়।
+
+
+NestJS-এ কেন Strategy ব্যবহার করা হয়?
+
+সবচেয়ে বেশি ব্যবহার হয় Authentication-এ।
+
+ধরি তোমার Application-এ Login করার অনেক উপায় আছে।
+
+
+Username + Password
+
+JWT Token
+
+Google Login
+
+Facebook Login
+
+GitHub Login
+
+OTP Login
+
+
+কিন্তু প্রত্যেকটার নিয়ম আলাদা।
+
+তাই প্রত্যেকটার জন্য আলাদা Strategy বানানো হয়।
+
+
