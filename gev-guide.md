@@ -73,3 +73,229 @@ Install Packages
   DTO হলো একটা ফর্ম (Form), যেখানে লেখা থাকে কোন কোন তথ্য নেওয়া যাবে।
   DTO হলো এমন একটি "নিয়মযুক্ত ফর্ম" যা বলে দেয়, Client থেকে কী ধরনের ডাটা গ্রহণ করা হবে এবং সেই ডাটা সঠিক কি না।
   Validation (@IsString(), @IsInt()) = ফর্ম ঠিকভাবে পূরণ হয়েছে কি না তা যাচাই করা
+
+
+
+
+  npm run migration:run	schema + view তৈরি (000-009)
+npm run seed	data ঢালা
+npm run db:reset	migration:run + seed (fresh DB প্রথমবার)
+npm run db:truncate	সব data মুছে ফেলা
+npm run db:refresh	truncate + seed (data রিসেট, schema অক্ষত)
+npm run migration:revert	শেষ migration undo
+
+
+
+
+প্রথমে Interceptor কী?
+
+ধরো তুমি একটা স্কুলে ঢুকছো।
+
+স্কুলের গেটে একজন গার্ড আছে।
+
+তুমি ঢোকার আগে সে দেখে
+
+কে আসছে
+কখন আসছে
+কেন আসছে
+
+আবার বের হওয়ার সময় দেখে
+
+কতক্ষণ ছিলে
+কী নিয়ে বের হলে
+
+Interceptor ঠিক এই গার্ডের মতো।
+
+এটা Request Controller-এ যাওয়ার আগে এবং Response Client-এর কাছে যাওয়ার আগে কাজ করতে পারে।
+
+NestJS Request Flow
+Client
+   │
+   ▼
+Middleware
+   │
+   ▼
+Guard
+   │
+   ▼
+Interceptor (Before)
+   │
+   ▼
+Pipe
+   │
+   ▼
+Controller
+   │
+   ▼
+Service
+   │
+   ▼
+Interceptor (After)
+   │
+   ▼
+Client
+
+দেখো,
+
+Interceptor দুই জায়গায় কাজ করতে পারে।
+
+Before Controller
+
+After Controller
+
+এটাই সবচেয়ে বড় শক্তি।
+
+
+আর কী কী করা যায়?
+
+Interceptor শুধু Logging-এর জন্য না।
+
+অনেক কাজ করা যায়।
+
+১. Response পরিবর্তন
+
+Controller
+
+return students;
+
+Interceptor
+
+return next.handle().pipe(
+    map(data=>({
+        success:true,
+        data
+    }))
+)
+
+Client পাবে
+
+{
+    "success": true,
+    "data": [
+        ...
+    ]
+}
+
+Controller কিছুই জানে না।
+
+২. Response Time বের করা
+
+তোমার LoggingInterceptor এটিই করছে।
+
+৩. Cache
+আগে Response আছে?
+
+হ্যাঁ
+
+↓
+
+Controller-এ যেও না
+
+↓
+
+Cache থেকে Return করো
+৪. File Compression
+
+Response ছোট করে পাঠানো।
+
+৫. Data Masking
+
+Database
+
+{
+"id":1,
+"name":"Mahid",
+"password":"123456"
+}
+
+Interceptor
+
+delete data.password;
+
+Client
+
+{
+"id":1,
+"name":"Mahid"
+}
+
+৬. Response Format
+
+Controller
+
+return user;
+
+Interceptor
+
+return {
+success:true,
+message:"Success",
+data:user
+}
+
+সব API একই Format।
+
+তাহলে Middleware আর Interceptor-এর পার্থক্য কী?
+| Middleware                             | Interceptor                       |
+| -------------------------------------- | --------------------------------- |
+| Controller-এর আগে চলে                  | Controller-এর আগে **এবং পরে** চলে |
+| Response modify করতে পারে না (সহজভাবে) | Response modify করতে পারে         |
+| Execution time মাপা কঠিন               | Execution time মাপা সহজ           |
+| Express-এর middleware-এর মতো           | NestJS-এর advanced feature        |
+
+
+Request Flow Example
+
+
+Client
+
+↓
+
+Middleware
+
+↓
+
+Guard
+
+↓
+
+LoggingInterceptor (Start Time)
+
+↓
+
+Controller
+
+↓
+
+Service
+
+↓
+
+Database
+
+↓
+
+Controller Return
+
+↓
+
+LoggingInterceptor
+
+↓
+
+Console
+
+GET /students - 35ms
+
+↓
+
+Client
+
+
+
+সহজে মনে রাখার কৌশল
+Middleware = দরজার প্রহরী (ভিতরে ঢোকার আগে দেখে)
+Guard = অনুমতি আছে কি না দেখে
+Pipe = ডেটা ঠিক আছে কি না যাচাই করে
+Interceptor = ক্যামেরাম্যান 📹 — Request শুরু হওয়ার সময়ও দেখে, Response শেষ হওয়ার সময়ও দেখে; চাইলে Response পরিবর্তনও করতে পারে।
+Exception Filter = Error হলে সেটি সুন্দরভাবে Handle করে
