@@ -7,7 +7,17 @@ import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
 import storageConfig from './config/storage.config';
 import { RedisModule } from './common/redis/redis.module';
+import { AcademicSessionsModule } from './modules/academic-sessions/academic-sessions.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { ClassesModule } from './modules/classes/classes.module';
+import { PermissionsModule } from './modules/permissions/permissions.module';
+import { RolePermissionsModule } from './modules/role-permissions/role-permissions.module';
+import { RolesModule } from './modules/roles/roles.module';
+import { SectionsModule } from './modules/sections/sections.module';
+import { StudentEnrollmentsModule } from './modules/student-enrollments/student-enrollments.module';
+import { StudentsModule } from './modules/students/students.module';
+import { SubjectsModule } from './modules/subjects/subjects.module';
+import { TeachersModule } from './modules/teachers/teachers.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -33,6 +43,16 @@ import { UsersModule } from './modules/users/users.module';
     RedisModule,
     UsersModule,
     AuthModule,
+    PermissionsModule,
+    RolesModule,
+    RolePermissionsModule,
+    TeachersModule,
+    StudentsModule,
+    StudentEnrollmentsModule,
+    ClassesModule,
+    SectionsModule,
+    SubjectsModule,
+    AcademicSessionsModule,
   ],
   controllers: [],
   providers: [],

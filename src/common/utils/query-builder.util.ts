@@ -2,6 +2,10 @@ import { SelectQueryBuilder } from 'typeorm';
 
 /**
  * Applies ILIKE search across the given columns to a TypeORM query builder.
+ *
+ * Columns are prefixed with `alias` by default, but a column that already
+ * contains a `.` is treated as fully-qualified and used as-is — so a search
+ * can span joined relations, e.g. `['studentCode', 'user.fullName']`.
  */
 export function applySearch<T extends object>(
   qb: SelectQueryBuilder<T>,
@@ -13,7 +17,8 @@ export function applySearch<T extends object>(
     return qb;
   }
   const clause = columns
-    .map((col) => `${alias}.${col} ILIKE :search`)
+    .map((col) => (col.includes('.') ? col : `${alias}.${col}`))
+    .map((qualified) => `${qualified} ILIKE :search`)
     .join(' OR ');
   return qb.andWhere(`(${clause})`, { search: `%${search}%` });
 }
