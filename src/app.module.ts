@@ -8,14 +8,18 @@ import redisConfig from './config/redis.config';
 import storageConfig from './config/storage.config';
 import { RedisModule } from './common/redis/redis.module';
 import { AcademicSessionsModule } from './modules/academic-sessions/academic-sessions.module';
+import { AttendanceModule } from './modules/attendance/attendance.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ClassesModule } from './modules/classes/classes.module';
+import { ExamResultsModule } from './modules/exam-results/exam-results.module';
+import { ExamsModule } from './modules/exams/exams.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
 import { RolePermissionsModule } from './modules/role-permissions/role-permissions.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { SectionsModule } from './modules/sections/sections.module';
 import { StudentEnrollmentsModule } from './modules/student-enrollments/student-enrollments.module';
 import { StudentsModule } from './modules/students/students.module';
+import { SubjectAssignmentsModule } from './modules/subject-assignments/subject-assignments.module';
 import { SubjectsModule } from './modules/subjects/subjects.module';
 import { TeachersModule } from './modules/teachers/teachers.module';
 import { UsersModule } from './modules/users/users.module';
@@ -53,6 +57,10 @@ import { UsersModule } from './modules/users/users.module';
     SectionsModule,
     SubjectsModule,
     AcademicSessionsModule,
+    SubjectAssignmentsModule,
+    ExamsModule,
+    AttendanceModule,
+    ExamResultsModule,
   ],
   controllers: [],
   providers: [],

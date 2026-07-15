@@ -495,4 +495,32 @@ JOIN public.permissions p ON p.name = r.perm_name
 ON CONFLICT DO NOTHING;
 
 
+-- =============================================================================
+-- STEP 20: ATTENDANCE PERMISSIONS + ROLE GRANTS
+-- (attendance module-এর জন্য; base list-এ ছিল না কারণ তখন module ছিল না)
+-- =============================================================================
+
+INSERT INTO public.permissions (name) VALUES
+  ('ATTENDANCE_MARK'),
+  ('ATTENDANCE_READ')
+ON CONFLICT DO NOTHING;
+
+-- SUPER_ADMIN(001) + ADMIN(002): both। TEACHER(003): both (student attendance)।
+-- STAFF(006): both (নিজের check-in/out)।
+INSERT INTO public.role_permissions (role_id, permission_id)
+SELECT r.role_id, p.id
+FROM (VALUES
+    ('00000000-0000-0000-0000-000000000001'::uuid, 'ATTENDANCE_MARK'),
+    ('00000000-0000-0000-0000-000000000001'::uuid, 'ATTENDANCE_READ'),
+    ('00000000-0000-0000-0000-000000000002'::uuid, 'ATTENDANCE_MARK'),
+    ('00000000-0000-0000-0000-000000000002'::uuid, 'ATTENDANCE_READ'),
+    ('00000000-0000-0000-0000-000000000003'::uuid, 'ATTENDANCE_MARK'),
+    ('00000000-0000-0000-0000-000000000003'::uuid, 'ATTENDANCE_READ'),
+    ('00000000-0000-0000-0000-000000000006'::uuid, 'ATTENDANCE_MARK'),
+    ('00000000-0000-0000-0000-000000000006'::uuid, 'ATTENDANCE_READ')
+  ) AS r(role_id, perm_name)
+JOIN public.permissions p ON p.name = r.perm_name
+ON CONFLICT DO NOTHING;
+
+
 COMMIT;
