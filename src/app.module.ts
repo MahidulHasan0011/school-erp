@@ -4,8 +4,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
+import rabbitmqConfig from './config/rabbitmq.config';
 import redisConfig from './config/redis.config';
 import storageConfig from './config/storage.config';
+import { RabbitMQModule } from './common/rabbitmq/rabbitmq.module';
 import { RedisModule } from './common/redis/redis.module';
 import { AcademicSessionsModule } from './modules/academic-sessions/academic-sessions.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
@@ -14,6 +16,8 @@ import { ClassesModule } from './modules/classes/classes.module';
 import { ExamResultsModule } from './modules/exam-results/exam-results.module';
 import { ExamsModule } from './modules/exams/exams.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
+import { RankingModule } from './modules/ranking/ranking.module';
+import { RankingLocksModule } from './modules/ranking-locks/ranking-locks.module';
 import { RolePermissionsModule } from './modules/role-permissions/role-permissions.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { SectionsModule } from './modules/sections/sections.module';
@@ -28,7 +32,14 @@ import { UsersModule } from './modules/users/users.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, jwtConfig, redisConfig, storageConfig],
+      load: [
+        appConfig,
+        databaseConfig,
+        jwtConfig,
+        redisConfig,
+        storageConfig,
+        rabbitmqConfig,
+      ],
     }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
@@ -45,6 +56,7 @@ import { UsersModule } from './modules/users/users.module';
       }),
     }),
     RedisModule,
+    RabbitMQModule,
     UsersModule,
     AuthModule,
     PermissionsModule,
@@ -61,6 +73,8 @@ import { UsersModule } from './modules/users/users.module';
     ExamsModule,
     AttendanceModule,
     ExamResultsModule,
+    RankingLocksModule,
+    RankingModule,
   ],
   controllers: [],
   providers: [],
