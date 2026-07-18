@@ -99,4 +99,24 @@ export class RankingController {
   ) {
     return this.rankingService.getJobStatus(classId, academicSessionId);
   }
+
+  // ── DLQ (parking lot) — admin ──
+  @Get('dlq')
+  @Permissions('RANKING_ADMIN')
+  @ApiOperation({
+    summary: 'DLQ-তে পার্ক হওয়া ব্যর্থ job দেখা (non-destructive peek)',
+  })
+  getDeadLetters() {
+    return this.rankingService.getDeadLetters();
+  }
+
+  @Post('dlq/replay')
+  @HttpCode(200)
+  @Permissions('RANKING_ADMIN')
+  @ApiOperation({
+    summary: 'DLQ-এর job আবার main queue-তে ফেরত পাঠানো (attempts reset)',
+  })
+  replayDeadLetters() {
+    return this.rankingService.replayDeadLetters();
+  }
 }

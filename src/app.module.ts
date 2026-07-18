@@ -13,8 +13,12 @@ import { AcademicSessionsModule } from './modules/academic-sessions/academic-ses
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ClassesModule } from './modules/classes/classes.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { ErrorLogsModule } from './modules/error-logs/error-logs.module';
 import { ExamResultsModule } from './modules/exam-results/exam-results.module';
 import { ExamsModule } from './modules/exams/exams.module';
+import { LeaveModule } from './modules/leave/leave.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
 import { RankingModule } from './modules/ranking/ranking.module';
 import { RankingLocksModule } from './modules/ranking-locks/ranking-locks.module';
@@ -26,6 +30,7 @@ import { StudentsModule } from './modules/students/students.module';
 import { SubjectAssignmentsModule } from './modules/subject-assignments/subject-assignments.module';
 import { SubjectsModule } from './modules/subjects/subjects.module';
 import { TeachersModule } from './modules/teachers/teachers.module';
+import { UploadsModule } from './modules/uploads/uploads.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -75,6 +80,11 @@ import { UsersModule } from './modules/users/users.module';
     ExamResultsModule,
     RankingLocksModule,
     RankingModule,
+    ErrorLogsModule,
+    UploadsModule,
+    NotificationsModule,
+    LeaveModule,
+    DashboardModule,
   ],
   controllers: [],
   providers: [],

@@ -9,11 +9,23 @@ import * as amqp from 'amqplib';
 
 export type JobHandler<T> = (payload: T) => Promise<void>;
 
+/** DLQ (parking lot)-এ পার্ক হওয়া একটি ব্যর্থ job-এর inspect view। */
+export interface DlqMessage {
+  /** কতবার চেষ্টার পর DLQ-তে গেছে। */
+  attempts: number;
+  /** সর্বশেষ ব্যর্থতার error message (থাকলে)। */
+  error: string | null;
+  /** মূল payload (JSON parse করা; না হলে raw string)। */
+  payload: unknown;
+}
+
 export interface ConsumerOptions {
   /** মোট কতবার চেষ্টা হবে (ব্যর্থ হলে retry সহ)। default 3 */
   maxAttempts?: number;
   /** প্রথম retry-এর বেস delay (ms)। exponential: base * 2^(attempt-1)। default 2000 */
   baseDelayMs?: number;
+  /** backoff-এর সর্বোচ্চ delay (ms) cap। default config.maxDelayMs (60000) */
+  maxDelayMs?: number;
 }
 
 const EXCHANGE = 'app.jobs';
@@ -98,6 +110,80 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  /**
+   * DLQ (`<queue>.dlq`)-এ পার্ক হওয়া job-গুলো non-destructive ভাবে পড়ে।
+   * প্রতিটি message get করে দেখা হয়, তারপর requeue (nack) করে ফেরত দেওয়া হয় —
+   * তাই peek করলে DLQ থেকে কিছুই মুছে যায় না।
+   */
+  async peekDlq(queue: string, limit = 50): Promise<DlqMessage[]> {
+    const ch = this.channel;
+    if (!ch) {
+      throw new Error('RabbitMQ channel প্রস্তুত নয়');
+    }
+    const dlq = `${queue}.dlq`;
+    await ch.assertQueue(dlq, { durable: true });
+
+    const collected: DlqMessage[] = [];
+    const held: amqp.GetMessage[] = [];
+    for (let i = 0; i < limit; i++) {
+      const msg = await ch.get(dlq, { noAck: false });
+      if (!msg) break; // queue খালি
+      collected.push({
+        attempts: Number(msg.properties.headers?.['x-attempts'] ?? 0),
+        error: (msg.properties.headers?.['x-error'] as string) ?? null,
+        payload: this.tryDecode(msg.content),
+      });
+      held.push(msg);
+    }
+    // non-destructive — সব message requeue করে DLQ-তে ফেরত পাঠাই
+    for (const msg of held) {
+      ch.nack(msg, false, true);
+    }
+    return collected;
+  }
+
+  /**
+   * DLQ থেকে message গুলো main queue-তে ফেরত পাঠায় (`x-attempts` reset করে),
+   * যাতে retry chain আবার শূন্য থেকে শুরু হয়। ফেরত পাঠানো message DLQ থেকে
+   * সরে যায় (destructive)। কতগুলো move হলো তা ফেরত দেয়।
+   */
+  async replayDlq(queue: string, limit = 100): Promise<number> {
+    const ch = this.channel;
+    if (!ch) {
+      throw new Error('RabbitMQ channel প্রস্তুত নয়');
+    }
+    const dlq = `${queue}.dlq`;
+    await ch.assertExchange(EXCHANGE, 'direct', { durable: true });
+    await ch.assertQueue(queue, { durable: true });
+    await ch.bindQueue(queue, EXCHANGE, queue);
+    await ch.assertQueue(dlq, { durable: true });
+
+    let moved = 0;
+    for (let i = 0; i < limit; i++) {
+      const msg = await ch.get(dlq, { noAck: false });
+      if (!msg) break; // DLQ খালি
+      // main queue-তে ফেরত — attempts শূন্য থেকে শুরু
+      ch.publish(EXCHANGE, queue, msg.content, {
+        persistent: true,
+        headers: { 'x-attempts': 0 },
+      });
+      ch.ack(msg); // publish সফল হলে তবেই DLQ থেকে সরাই
+      moved++;
+    }
+    if (moved > 0) {
+      this.logger.log(`DLQ replay: ${queue} → ${moved}টি job আবার queue-তে`);
+    }
+    return moved;
+  }
+
+  private tryDecode(content: Buffer): unknown {
+    try {
+      return JSON.parse(content.toString());
+    } catch {
+      return content.toString();
+    }
+  }
+
   /** একটি queue-এর consumer register করে (reconnect-এও টিকে থাকে)। */
   async registerConsumer<T>(
     queue: string,
@@ -106,6 +192,10 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
   ): Promise<void> {
     const maxAttempts = options.maxAttempts ?? 3;
     const baseDelayMs = options.baseDelayMs ?? 2000;
+    const maxDelayMs =
+      options.maxDelayMs ??
+      this.config.get<number>('rabbitmq.maxDelayMs') ??
+      60000;
 
     const setup = async (): Promise<void> => {
       const ch = this.channel;
@@ -116,7 +206,14 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
       await ch.assertQueue(`${queue}.dlq`, { durable: true });
       await ch.consume(queue, (msg) => {
         if (msg) {
-          void this.handleMessage(queue, msg, handler, maxAttempts, baseDelayMs);
+          void this.handleMessage(
+            queue,
+            msg,
+            handler,
+            maxAttempts,
+            baseDelayMs,
+            maxDelayMs,
+          );
         }
       });
       this.logger.log(`Consumer bound: ${queue} (maxAttempts=${maxAttempts})`);
@@ -134,6 +231,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     handler: JobHandler<T>,
     maxAttempts: number,
     baseDelayMs: number,
+    maxDelayMs: number,
   ): Promise<void> {
     const ch = this.channel;
     if (!ch) return;
@@ -156,7 +254,11 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
           `Job ${queue} ${nextAttempts} বার ব্যর্থ → DLQ: ${message}`,
         );
       } else {
-        const delay = this.computeBackoff(nextAttempts, baseDelayMs);
+        const delay = this.computeBackoff(
+          nextAttempts,
+          baseDelayMs,
+          maxDelayMs,
+        );
         await this.scheduleRetry(queue, msg.content, nextAttempts, delay);
         ch.ack(msg);
         this.logger.warn(
@@ -190,13 +292,27 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  /** exponential backoff + jitter (250ms bucket-এ round করে delay queue bound রাখে)। */
-  private computeBackoff(attempt: number, baseDelayMs: number): number {
-    const exp = baseDelayMs * Math.pow(2, attempt - 1);
-    const jitter = Math.floor(Math.random() * exp * 0.2);
+  /**
+   * Exponential backoff + "Equal Jitter" (AWS-সুপারিশকৃত কৌশল)।
+   *
+   *   capped = min(maxDelayMs, base * 2^(attempt-1))   ← cap দিয়ে বাঁধা
+   *   delay  = capped/2 + random(0, capped/2)          ← অর্ধেক নিশ্চিত + অর্ধেক random
+   *
+   * অর্ধেকটা fixed রাখায় delay খুব ছোট হয় না, আর random অর্ধেকটা retry-গুলোকে
+   * ছড়িয়ে দেয় — একাধিক worker একই সময়ে fail করলেও সবাই একসাথে retry করে না
+   * (thundering herd এড়ায়)। শেষে 250ms bucket-এ round করে delay queue সংখ্যা bound রাখি।
+   */
+  private computeBackoff(
+    attempt: number,
+    baseDelayMs: number,
+    maxDelayMs: number,
+  ): number {
+    const capped = Math.min(maxDelayMs, baseDelayMs * Math.pow(2, attempt - 1));
+    const half = capped / 2;
+    const delay = half + Math.random() * half;
     return Math.max(
       RETRY_BUCKET_MS,
-      Math.round((exp + jitter) / RETRY_BUCKET_MS) * RETRY_BUCKET_MS,
+      Math.round(delay / RETRY_BUCKET_MS) * RETRY_BUCKET_MS,
     );
   }
 

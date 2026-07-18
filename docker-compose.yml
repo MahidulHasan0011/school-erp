@@ -1,0 +1,63 @@
+# School ERP — local infrastructure (Redis + RabbitMQ + MinIO)
+# চালু:  docker compose up -d
+# বন্ধ:  docker compose down          (data থাকবে — volume-এ)
+# সব মুছে ফেলা: docker compose down -v  (⚠ data সহ মুছে যাবে)
+#
+# .env-এর সাথে মিলিয়ে port/credential রাখা হয়েছে।
+
+services:
+  # Redis — auth session / token revocation (.env: 6379, no password)
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # RabbitMQ — ranking background job (.env: guest/guest, 5672; UI 15672)
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - '5672:5672' # app connect (AMQP)
+      - '15672:15672' # management UI → http://localhost:15672 (guest/guest)
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # MinIO — file/object storage (uploads). API 9000, Console 9001
+  minio:
+    image: minio/minio
+    container_name: minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - '9000:9000' # S3 API
+      - '9001:9001' # Console UI → http://localhost:9001 (minioadmin/minioadmin)
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  redis-data:
+  rabbitmq-data:
+  minio-data:

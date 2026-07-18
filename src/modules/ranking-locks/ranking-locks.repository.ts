@@ -44,40 +44,57 @@ export class RankingLocksRepository {
    * lock row না থাকলে তৈরি করে lock করে, থাকলে আপডেট — upsert।
    * (class_id, academic_session_id) unique-এর উপর ON CONFLICT।
    */
-  async lock(
+  lock(
     classId: string,
     academicSessionId: string,
     lockedBy: string | null,
     manager?: EntityManager,
   ): Promise<RankingLock> {
-    const rows: RankingLock[] = await this.exec(manager).query(
-      `INSERT INTO ranking_locks
-         (class_id, academic_session_id, is_locked, locked_at, locked_by)
-       VALUES ($1, $2, true, NOW(), $3)
-       ON CONFLICT (class_id, academic_session_id)
-       DO UPDATE SET is_locked = true, locked_at = NOW(),
-                     locked_by = $3, updated_at = NOW()
-       RETURNING *`,
-      [classId, academicSessionId, lockedBy],
-    );
-    return rows[0];
+    return this.writeLock(manager, classId, academicSessionId, true, lockedBy);
   }
 
-  async unlock(
+  unlock(
     classId: string,
     academicSessionId: string,
     manager?: EntityManager,
   ): Promise<RankingLock> {
-    const rows: RankingLock[] = await this.exec(manager).query(
-      `INSERT INTO ranking_locks
-         (class_id, academic_session_id, is_locked, locked_at, locked_by)
-       VALUES ($1, $2, false, NULL, NULL)
-       ON CONFLICT (class_id, academic_session_id)
-       DO UPDATE SET is_locked = false, locked_at = NULL,
-                     locked_by = NULL, updated_at = NOW()
-       RETURNING *`,
-      [classId, academicSessionId],
-    );
-    return rows[0];
+    return this.writeLock(manager, classId, academicSessionId, false, null);
+  }
+
+  /**
+   * lock/unlock-এর common upsert — TypeORM QueryBuilder দিয়ে
+   * `INSERT ... ON CONFLICT DO UPDATE ... RETURNING *` (raw SQL string ছাড়া)।
+   *
+   * - `() => 'NOW()'` দিয়ে timestamp DB-এর ঘড়িতে বসে (app-server time নয়)।
+   * - `.orUpdate(overwrite, conflictTarget)` → ON CONFLICT DO UPDATE।
+   * - `.returning('*')` → এক round-trip-এ পুরো সারি ফেরত (আলাদা SELECT লাগে না,
+   *   roll-engine-এর transaction-এ গুরুত্বপূর্ণ)।
+   */
+  private async writeLock(
+    manager: EntityManager | undefined,
+    classId: string,
+    academicSessionId: string,
+    isLocked: boolean,
+    lockedBy: string | null,
+  ): Promise<RankingLock> {
+    const result = await this.exec(manager)
+      .createQueryBuilder()
+      .insert()
+      .into(RankingLock)
+      .values({
+        classId,
+        academicSessionId,
+        isLocked,
+        lockedAt: isLocked ? () => 'NOW()' : null,
+        lockedBy: isLocked ? lockedBy : null,
+        updatedAt: () => 'NOW()',
+      })
+      .orUpdate(
+        ['is_locked', 'locked_at', 'locked_by', 'updated_at'],
+        ['class_id', 'academic_session_id'],
+      )
+      .returning('*')
+      .execute();
+    return (result.raw as RankingLock[])[0];
   }
 }

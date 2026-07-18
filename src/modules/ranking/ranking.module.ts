@@ -2,7 +2,11 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AcademicSessionsModule } from '../academic-sessions/academic-sessions.module';
 import { ClassesModule } from '../classes/classes.module';
+import { ExamResult } from '../exam-results/entities/exam-result.entity';
+import { Exam } from '../exams/entities/exam.entity';
 import { RankingLocksModule } from '../ranking-locks/ranking-locks.module';
+import { Section } from '../sections/entities/section.entity';
+import { StudentEnrollment } from '../student-enrollments/entities/student-enrollment.entity';
 import { RankingEngine } from './engine/ranking.engine';
 import { RollEngine } from './engine/roll.engine';
 import { RankingAuditLog } from './entities/ranking-audit-log.entity';
@@ -17,7 +21,14 @@ import { RankingService } from './ranking.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([RankingHistory, RankingAuditLog]),
+    TypeOrmModule.forFeature([
+      RankingHistory,
+      RankingAuditLog,
+      Exam,
+      ExamResult,
+      StudentEnrollment,
+      Section,
+    ]),
     RankingLocksModule,
     AcademicSessionsModule,
     ClassesModule,

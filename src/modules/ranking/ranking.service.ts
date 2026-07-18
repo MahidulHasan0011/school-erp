@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { RabbitMQService } from '../../common/rabbitmq/rabbitmq.service';
 import { RedisService } from '../../common/redis/redis.service';
 import { AcademicSessionsRepository } from '../academic-sessions/academic-sessions.repository';
 import { ClassesRepository } from '../classes/classes.repository';
@@ -18,6 +19,8 @@ import { RankingAction } from './entities/ranking-audit-log.entity';
 import { RankingQueue } from './queue/ranking.queue';
 import { RollQueue } from './queue/roll.queue';
 import {
+  RANKING_QUEUE,
+  ROLL_QUEUE,
   RankingJobPayload,
   RankingJobStatus,
   RollJobPayload,
@@ -41,6 +44,7 @@ export class RankingService {
     private readonly rankingEngine: RankingEngine,
     private readonly rollEngine: RollEngine,
     private readonly redis: RedisService,
+    private readonly rabbitmq: RabbitMQService,
   ) {}
 
   // ═══════════════════ WRITE — request (validate + queue) ═══════════════════
@@ -196,7 +200,6 @@ export class RankingService {
       throw err;
     }
   }
-
   /** শুধু unlock (regenerate ছাড়া)। */
   async unlock(classId: string, academicSessionId: string, actorId: string) {
     await this.loadClassAndSession(classId, academicSessionId);
@@ -276,6 +279,38 @@ export class RankingService {
   async getJobStatus(classId: string, academicSessionId: string) {
     const raw = await this.redis.get(this.jobKey(classId, academicSessionId));
     return raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+  }
+
+  // ═══════════════════ DLQ (parking lot) — admin ═══════════════════
+
+  /**
+   * দুই queue-এর DLQ-তে পার্ক হওয়া ব্যর্থ job-গুলো non-destructive ভাবে দেখায়
+   * (সব retry শেষ হওয়ার পরও যেগুলো ব্যর্থ)। শুধু inspect — কিছু মুছে/সরায় না।
+   */
+  async getDeadLetters() {
+    const [ranking, roll] = await Promise.all([
+      this.rabbitmq.peekDlq(RANKING_QUEUE),
+      this.rabbitmq.peekDlq(ROLL_QUEUE),
+    ]);
+    return {
+      ranking: { queue: RANKING_QUEUE, count: ranking.length, messages: ranking },
+      roll: { queue: ROLL_QUEUE, count: roll.length, messages: roll },
+    };
+  }
+
+  /**
+   * DLQ-এর job গুলো আবার main queue-তে ফেরত পাঠায় (attempts reset করে) —
+   * সমস্যা fix হওয়ার পর manually re-process করার জন্য।
+   */
+  async replayDeadLetters() {
+    const [ranking, roll] = await Promise.all([
+      this.rabbitmq.replayDlq(RANKING_QUEUE),
+      this.rabbitmq.replayDlq(ROLL_QUEUE),
+    ]);
+    return {
+      replayed: { ranking, roll, total: ranking + roll },
+      message: `${ranking + roll}টি job DLQ থেকে queue-তে ফেরত পাঠানো হয়েছে`,
+    };
   }
 
   // ═══════════════════ helpers ═══════════════════
