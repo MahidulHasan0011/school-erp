@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { paginate } from '../../common/utils/pagination.util';
+import { EventsGateway } from '../../websocket/events.gateway';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { QueryNotificationsDto } from './dto/query-notifications.dto';
 import { Notification, NotificationType } from './entities/notification.entity';
@@ -20,6 +21,7 @@ export interface NotifyInput {
 export class NotificationsService {
   constructor(
     private readonly notificationsRepository: NotificationsRepository,
+    private readonly eventsGateway: EventsGateway,
   ) {}
 
   /** admin — এক বা একাধিক recipient-কে notification পাঠায় (per-recipient row)। */
@@ -39,6 +41,7 @@ export class NotificationsService {
       }),
     );
     const saved = await this.notificationsRepository.createMany(rows);
+    this.pushLive(saved);
     return { message: 'Notifications sent', count: saved.length };
   }
 
@@ -46,8 +49,8 @@ export class NotificationsService {
    * অন্য module (যেমন leave) থেকে একজনকে notification পাঠানোর helper।
    * ব্যর্থ হলেও মূল flow যেন না ভাঙে — caller চাইলে catch করবে।
    */
-  notify(input: NotifyInput): Promise<Notification[]> {
-    return this.notificationsRepository.createMany([
+  async notify(input: NotifyInput): Promise<Notification[]> {
+    const saved = await this.notificationsRepository.createMany([
       {
         recipientId: input.recipientId,
         type: input.type ?? NotificationType.GENERAL,
@@ -58,6 +61,18 @@ export class NotificationsService {
         createdBy: input.createdBy ?? null,
       },
     ]);
+    this.pushLive(saved);
+    return saved;
+  }
+
+  /**
+   * save হওয়া notification গুলো recipient-এর socket room-এ live push করে।
+   * WebSocket connected না থাকলেও ক্ষতি নেই — row DB-তে থেকে যায়, পরে GET /me-তে আসে।
+   */
+  private pushLive(notifications: Notification[]): void {
+    for (const n of notifications) {
+      this.eventsGateway.emitToUser(n.recipientId, 'notification', n);
+    }
   }
 
   async findMine(userId: string, query: QueryNotificationsDto) {

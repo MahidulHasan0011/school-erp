@@ -32,6 +32,7 @@ import { SubjectsModule } from './modules/subjects/subjects.module';
 import { TeachersModule } from './modules/teachers/teachers.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { UsersModule } from './modules/users/users.module';
+import { WebsocketModule } from './websocket/websocket.module';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { UsersModule } from './modules/users/users.module';
     NotificationsModule,
     LeaveModule,
     DashboardModule,
+    WebsocketModule,
   ],
   controllers: [],
   providers: [],
