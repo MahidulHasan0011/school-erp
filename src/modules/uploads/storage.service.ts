@@ -108,7 +108,7 @@ export class StorageService {
       );
     } catch (err) {
       this.logger.warn(
-        `S3 object delete ব্যর্থ (${storageKey}): ${(err as Error).message}`,
+        `S3 object deletion failed (${storageKey}): ${(err as Error).message}`,
       );
     }
   }

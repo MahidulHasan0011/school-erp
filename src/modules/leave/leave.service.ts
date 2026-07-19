@@ -119,15 +119,16 @@ export class LeaveService {
     const saved = await this.leaveRepository.save(leave);
 
     // owner-কে notify (leave-এর user_id থাকলে)
+    // NOTE: title/message DB-তে persist হয় ও user দেখে — তাই English (data, comment নয়)
     if (saved.userId) {
-      const verb = status === LeaveStatus.APPROVED ? 'অনুমোদিত' : 'প্রত্যাখ্যাত';
+      const verb = status === LeaveStatus.APPROVED ? 'approved' : 'rejected';
       await this.notificationsService.notify({
         recipientId: saved.userId,
         type: NotificationType.LEAVE,
-        title: `আপনার ছুটির আবেদন ${verb}`,
+        title: `Your leave request was ${verb}`,
         message: note
-          ? `${saved.startDate} – ${saved.endDate}: ${verb}। মন্তব্য: ${note}`
-          : `${saved.startDate} – ${saved.endDate}: ${verb}।`,
+          ? `${saved.startDate} – ${saved.endDate}: ${verb}. Note: ${note}`
+          : `${saved.startDate} – ${saved.endDate}: ${verb}.`,
         relatedType: 'leave',
         relatedId: saved.id,
         createdBy: approverId,
@@ -145,9 +146,10 @@ export class LeaveService {
   }
 
   private assertPending(leave: Leave): void {
-    if (leave.status !== LeaveStatus.PENDING) {
+    const status = leave.status as LeaveStatus;
+    if (status !== LeaveStatus.PENDING) {
       throw new BadRequestException(
-        `Only PENDING leave can be modified (current: ${leave.status})`,
+        `Only PENDING leave can be modified (current: ${status})`,
       );
     }
   }

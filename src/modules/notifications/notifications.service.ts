@@ -2,10 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { paginate } from '../../common/utils/pagination.util';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { QueryNotificationsDto } from './dto/query-notifications.dto';
-import {
-  Notification,
-  NotificationType,
-} from './entities/notification.entity';
+import { Notification, NotificationType } from './entities/notification.entity';
 import { NotificationsRepository } from './notifications.repository';
 
 /** অন্য module থেকে notification বানানোর জন্য input (programmatic)। */
@@ -91,7 +88,9 @@ export class NotificationsService {
     return notification;
   }
 
-  async markAllRead(userId: string): Promise<{ message: string; updated: number }> {
+  async markAllRead(
+    userId: string,
+  ): Promise<{ message: string; updated: number }> {
     const updated = await this.notificationsRepository.markAllRead(userId);
     return { message: 'All notifications marked read', updated };
   }

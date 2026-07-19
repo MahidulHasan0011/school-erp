@@ -27,7 +27,10 @@ export class NotificationsRepository {
   }
 
   /** নির্দিষ্ট user-এর একটি notification (নিজের বলেই ফিরবে)। */
-  findOneForUser(id: string, recipientId: string): Promise<Notification | null> {
+  findOneForUser(
+    id: string,
+    recipientId: string,
+  ): Promise<Notification | null> {
     return this.repo.findOne({ where: { id, recipientId } });
   }
 
