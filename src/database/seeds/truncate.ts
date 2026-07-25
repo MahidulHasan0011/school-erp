@@ -53,9 +53,9 @@ async function run(): Promise<void> {
 
   try {
     await dataSource.query(`TRUNCATE TABLE ${tableList} RESTART IDENTITY CASCADE;`);
-    console.log(`✅ ${TABLES.length} tables truncated successfully.`);
+    console.log(`${TABLES.length} tables truncated successfully.`);
   } catch (err) {
-    console.error('❌ Truncate failed:', err);
+    console.error('Truncate failed:', err);
     process.exitCode = 1;
   } finally {
     await dataSource.destroy();

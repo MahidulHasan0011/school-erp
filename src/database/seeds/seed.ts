@@ -19,9 +19,9 @@ async function run(): Promise<void> {
 
   try {
     await dataSource.query(sql);
-    console.log('✅ Seed completed successfully.');
+    console.log('Seed completed successfully.');
   } catch (err) {
-    console.error('❌ Seed failed:', err);
+    console.error('Seed failed:', err);
     process.exitCode = 1;
   } finally {
     await dataSource.destroy();
