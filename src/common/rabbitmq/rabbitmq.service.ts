@@ -56,7 +56,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
       await this.channel?.close();
       await this.connection?.close();
     } catch {
-      // shutdown — উপেক্ষা
+      // shutdown
     }
   }
 
@@ -96,6 +96,10 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
       this.connecting = false;
     }
   }
+
+// 26-2026
+
+
 
   /** একটি job queue-তে message পাঠায়। */
   async publish<T>(queue: string, payload: T): Promise<void> {
