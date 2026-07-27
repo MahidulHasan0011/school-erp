@@ -97,14 +97,10 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-// 26-2026
-
-
-
   /** একটি job queue-তে message পাঠায়। */
   async publish<T>(queue: string, payload: T): Promise<void> {
     if (!this.channel) {
-      throw new Error('RabbitMQ channel প্রস্তুত নয়');
+      throw new Error('RabbitMQ channel is not ready');
     }
     await this.channel.assertQueue(queue, { durable: true });
     await this.channel.bindQueue(queue, EXCHANGE, queue);
@@ -122,7 +118,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
   async peekDlq(queue: string, limit = 50): Promise<DlqMessage[]> {
     const ch = this.channel;
     if (!ch) {
-      throw new Error('RabbitMQ channel প্রস্তুত নয়');
+      throw new Error('RabbitMQ channel is not ready');
     }
     const dlq = `${queue}.dlq`;
     await ch.assertQueue(dlq, { durable: true });
@@ -131,7 +127,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     const held: amqp.GetMessage[] = [];
     for (let i = 0; i < limit; i++) {
       const msg = await ch.get(dlq, { noAck: false });
-      if (!msg) break; // queue খালি
+      if (!msg) break; // queue empty
       collected.push({
         attempts: Number(msg.properties.headers?.['x-attempts'] ?? 0),
         error: (msg.properties.headers?.['x-error'] as string) ?? null,
@@ -154,7 +150,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
   async replayDlq(queue: string, limit = 100): Promise<number> {
     const ch = this.channel;
     if (!ch) {
-      throw new Error('RabbitMQ channel প্রস্তুত নয়');
+      throw new Error('RabbitMQ channel is not ready');
     }
     const dlq = `${queue}.dlq`;
     await ch.assertExchange(EXCHANGE, 'direct', { durable: true });
@@ -165,7 +161,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     let moved = 0;
     for (let i = 0; i < limit; i++) {
       const msg = await ch.get(dlq, { noAck: false });
-      if (!msg) break; // DLQ খালি
+      if (!msg) break; // DLQ empty
       // main queue-তে ফেরত — attempts শূন্য থেকে শুরু
       ch.publish(EXCHANGE, queue, msg.content, {
         persistent: true,
