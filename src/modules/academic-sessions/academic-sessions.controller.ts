@@ -26,7 +26,7 @@ import { UpdateAcademicSessionDto } from './dto/update-academic-session.dto';
 export class AcademicSessionsController {
   constructor(private readonly sessionsService: AcademicSessionsService) {}
 
-  // ⚠️ '/active' অবশ্যই '/:id'-এর আগে — নইলে 'active' কে UUID param ধরে ফেলবে
+  //'/active' অবশ্যই '/:id'-এর আগে — নইলে 'active' কে UUID param ধরে ফেলবে
   @Get('active')
   @Permissions('SESSION_READ')
   @ApiOperation({ summary: 'বর্তমান active session' })

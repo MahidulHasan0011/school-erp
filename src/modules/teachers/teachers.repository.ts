@@ -9,7 +9,12 @@ import {
 } from '../../common/utils/query-builder.util';
 import { Teacher } from './entities/teacher.entity';
 
-const SORTABLE_COLUMNS = ['designation', 'joiningDate', 'createdAt', 'updatedAt'];
+const SORTABLE_COLUMNS = [
+  'designation',
+  'joiningDate',
+  'createdAt',
+  'updatedAt',
+];
 
 @Injectable()
 export class TeachersRepository {

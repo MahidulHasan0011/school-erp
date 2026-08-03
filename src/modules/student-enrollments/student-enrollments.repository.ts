@@ -12,7 +12,12 @@ import { Section } from '../sections/entities/section.entity';
 import { QueryEnrollmentsDto } from './dto/query-enrollments.dto';
 import { StudentEnrollment } from './entities/student-enrollment.entity';
 
-const SORTABLE_COLUMNS = ['rollNumber', 'admissionDate', 'createdAt', 'updatedAt'];
+const SORTABLE_COLUMNS = [
+  'rollNumber',
+  'admissionDate',
+  'createdAt',
+  'updatedAt',
+];
 
 @Injectable()
 export class StudentEnrollmentsRepository {
