@@ -34,7 +34,7 @@ export class Notification {
   @Column({ name: 'recipient_id', type: 'uuid' })
   recipientId: string;
 
-  @ApiProperty({ default: NotificationType.GENERAL })
+  @ApiProperty({ enum: NotificationType, default: NotificationType.GENERAL })
   @Column({ type: 'varchar', length: 50, default: NotificationType.GENERAL })
   type: string;
 

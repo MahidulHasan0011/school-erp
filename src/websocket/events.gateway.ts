@@ -39,6 +39,8 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly redis: RedisService,
   ) {}
 
+
+  // handleConnection framework lifecycle hook
   async handleConnection(client: Socket): Promise<void> {
     try {
       const token = this.extractToken(client);
@@ -66,10 +68,12 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  // handleDisconnect framework lifecycle hook
   handleDisconnect(client: Socket): void {
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
+  // handlePing client-triggered message handler
   @SubscribeMessage('ping')
   handlePing(): string {
     return 'pong';

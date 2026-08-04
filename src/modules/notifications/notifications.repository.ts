@@ -40,7 +40,8 @@ export class NotificationsRepository {
   ): Promise<[Notification[], number]> {
     const qb = this.repo
       .createQueryBuilder('notification')
-      .where('notification.recipientId = :recipientId', { recipientId });
+      // notification.recipientId (entity property)
+      .where('notification.recipientId = :recipientId', { recipientId }); // :recipientId একটি placeholder (parameter)
 
     applyFilters(qb, 'notification', {
       isRead: query.isRead,
@@ -68,7 +69,7 @@ export class NotificationsRepository {
       .createQueryBuilder()
       .update(Notification)
       .set({ isRead: true, readAt: () => 'NOW()', updatedAt: () => 'NOW()' })
-      .where('recipient_id = :recipientId', { recipientId })
+      .where('recipient_id = :recipientId', { recipientId }) // recipient_id (raw DB column)
       .andWhere('is_read = false')
       .andWhere('deleted_at IS NULL')
       .execute();
