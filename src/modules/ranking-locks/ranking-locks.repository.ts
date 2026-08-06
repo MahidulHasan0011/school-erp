@@ -30,13 +30,19 @@ export class RankingLocksRepository {
     });
   }
 
+  /**
+   * lock বসানো আছে কিনা। `manager` দিলে সেই transaction-এর ভেতর থেকে পড়া হয় —
+   * roll-engine advisory lock নেওয়ার পর এভাবেই re-check করে, যাতে একই সময়ে চলা
+   * দ্বিতীয় GENERATE job duplicate version তৈরি না করে।
+   */
   async isLocked(
     classId: string,
     academicSessionId: string,
+    manager?: EntityManager,
   ): Promise<boolean> {
-    const lock = await this.repo.findOne({
-      where: { classId, academicSessionId },
-    });
+    const lock = await this.exec(manager)
+      .getRepository(RankingLock)
+      .findOne({ where: { classId, academicSessionId } });
     return lock?.isLocked === true;
   }
 
