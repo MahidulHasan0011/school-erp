@@ -25,8 +25,17 @@ export class RankingLocksService {
     };
   }
 
-  isLocked(classId: string, academicSessionId: string): Promise<boolean> {
-    return this.rankingLocksRepository.isLocked(classId, academicSessionId);
+  /** `manager` দিলে transaction-এর ভেতর থেকে পড়া হয় (roll-engine re-check)। */
+  isLocked(
+    classId: string,
+    academicSessionId: string,
+    manager?: EntityManager,
+  ): Promise<boolean> {
+    return this.rankingLocksRepository.isLocked(
+      classId,
+      academicSessionId,
+      manager,
+    );
   }
 
   lock(
