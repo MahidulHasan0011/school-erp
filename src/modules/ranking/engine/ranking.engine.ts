@@ -1,15 +1,28 @@
 import { Injectable } from '@nestjs/common';
 import { RankingRepository } from '../ranking.repository';
 
-/** ranking build-এর একটি entry (rank সহ)। */
+/**
+ * ranking build-এর একটি entry (rank সহ)।
+ *
+ * ⚠️ date field গুলো `string | Date` — `pg` DATE/TIMESTAMP কলামকে JS `Date`
+ * object-এ পরিণত করে (pg-types), কিন্তু RabbitMQ payload-এ JSON হয়ে গেলে সেগুলো
+ * ISO string হয়ে ফেরে। তাই তুলনার আগে সবসময় primitive-এ নামাতে হবে (`toTime`)।
+ */
 export interface RankedEntry {
   studentId: string;
   totalScore: number;
   finalScore: number;
   midScore: number;
-  admissionDate: string | null;
-  enrollmentCreatedAt: string;
+  admissionDate: string | Date | null;
+  enrollmentCreatedAt: string | Date;
   rankPosition: number;
+}
+
+/** date/timestamp → তুলনাযোগ্য number। null/invalid সবার শেষে যায়। */
+function toTime(value: string | Date | null | undefined): number {
+  if (!value) return Number.MAX_SAFE_INTEGER;
+  const ms = value instanceof Date ? value.getTime() : Date.parse(value);
+  return Number.isNaN(ms) ? Number.MAX_SAFE_INTEGER : ms;
 }
 
 /**
@@ -86,18 +99,30 @@ export class RankingEngine {
     return this.sortAndRank([...oldList, ...newList]);
   }
 
-  /** tie-break অনুযায়ী sort করে rank_position (1..n) বসায়। */
+  /**
+   * tie-break অনুযায়ী sort করে rank_position (1..n) বসায়।
+   *
+   * date গুলো `toTime()` দিয়ে number-এ নামানো হয় — সরাসরি `!==` দিয়ে তুলনা করলে
+   * `Date` object-এর reference মেলানো হতো (একই তারিখেও সবসময় `true`), ফলে
+   * comparator দুই দিকেই `1` ফেরত দিত এবং পরের tie-break গুলো (createdAt,
+   * studentId) কখনো চলত না — একই দিনে ভর্তি ছাত্রদের ক্রম হয়ে যেত অনির্ধারিত।
+   */
   private sortAndRank(list: RankedEntry[]): RankedEntry[] {
     const sorted = [...list].sort((a, b) => {
       if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
       if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore;
       if (b.midScore !== a.midScore) return b.midScore - a.midScore;
-      const ad = a.admissionDate ?? '9999-12-31';
-      const bd = b.admissionDate ?? '9999-12-31';
-      if (ad !== bd) return ad < bd ? -1 : 1;
-      if (a.enrollmentCreatedAt !== b.enrollmentCreatedAt) {
-        return a.enrollmentCreatedAt < b.enrollmentCreatedAt ? -1 : 1;
-      }
+
+      const ad = toTime(a.admissionDate);
+      const bd = toTime(b.admissionDate);
+      if (ad !== bd) return ad - bd; // আগে ভর্তি হলে আগে
+
+      const ac = toTime(a.enrollmentCreatedAt);
+      const bc = toTime(b.enrollmentCreatedAt);
+      if (ac !== bc) return ac - bc;
+
+      // শেষ ভরসা — deterministic, তাই একই ডেটায় প্রতিবার একই ফলাফল
+      if (a.studentId === b.studentId) return 0;
       return a.studentId < b.studentId ? -1 : 1;
     });
     sorted.forEach((e, i) => (e.rankPosition = i + 1));

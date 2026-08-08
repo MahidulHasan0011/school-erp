@@ -92,7 +92,9 @@ export class RankingController {
 
   @Get(':classId/:academicSessionId/job-status')
   @Permissions('RANKING_READ')
-  @ApiOperation({ summary: 'সর্বশেষ ranking job-এর status (queued/processing/…)' })
+  @ApiOperation({
+    summary: 'সর্বশেষ ranking job-এর status (queued/processing/…)',
+  })
   getJobStatus(
     @Param('classId', ParseUUIDPipe) classId: string,
     @Param('academicSessionId', ParseUUIDPipe) academicSessionId: string,

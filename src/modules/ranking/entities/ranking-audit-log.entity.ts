@@ -23,7 +23,11 @@ export class RankingAuditLog {
   id: string;
 
   @ApiProperty({ enum: RankingAction })
-  @Column({ type: 'enum', enum: RankingAction, enumName: 'ranking_action_enum' })
+  @Column({
+    type: 'enum',
+    enum: RankingAction,
+    enumName: 'ranking_action_enum',
+  })
   action: RankingAction;
 
   @ApiProperty()

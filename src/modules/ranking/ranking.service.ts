@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
@@ -24,6 +25,7 @@ import {
   RankingJobPayload,
   RankingJobStatus,
   RollJobPayload,
+  RollListEntry,
 } from './ranking.constants';
 import { RankingRepository } from './ranking.repository';
 
@@ -33,6 +35,8 @@ import { RankingRepository } from './ranking.repository';
  */
 @Injectable()
 export class RankingService {
+  private readonly logger = new Logger(RankingService.name);
+
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly rankingRepository: RankingRepository,
@@ -73,7 +77,14 @@ export class RankingService {
     return this.enqueue('GENERATE', dto, triggeredBy);
   }
 
-  /** Admin recalculate — unlock করে queue-তে পাঠায়। */
+  /**
+   * Admin recalculate — locked অবস্থার উপরেই চলে।
+   *
+   * এখানে আগে থেকে unlock করা হয় না (আগে করা হতো)। কারণ publish ব্যর্থ হলে ক্লাস
+   * unlocked অবস্থায় পড়ে থাকত পুরনো roll নিয়ে, আর যে কেউ তখন generate চালিয়ে
+   * দিতে পারত। RollEngine কাজ শেষে lock নতুন করে বসায়, আর worker-এর lock check
+   * শুধু GENERATE-এর জন্য — তাই আগাম unlock-এর কোনো প্রয়োজনই নেই।
+   */
   async requestRecalculate(dto: GenerateRollDto, triggeredBy: string) {
     const admissionTestEnabled = await this.loadClassAndSession(
       dto.classId,
@@ -84,7 +95,6 @@ export class RankingService {
       dto.academicSessionId,
       admissionTestEnabled,
     );
-    await this.rankingLocksService.unlock(dto.classId, dto.academicSessionId);
     return this.enqueue('RECALCULATE', dto, triggeredBy);
   }
 
@@ -97,13 +107,24 @@ export class RankingService {
       action,
       classId: dto.classId,
       academicSessionId: dto.academicSessionId,
-      sectionId: dto.sectionId ?? null,
       triggeredBy,
     };
+    // status আগে লিখি (worker-এর 'processing' যেন পরে overwrite না হয়), আর
+    // publish ব্যর্থ হলে status পরিষ্কার করে দিই — নইলে queue-তে কিছু না থাকা
+    // সত্ত্বেও ইউজার চিরকাল 'queued' দেখত।
     await this.setJobStatus(dto.classId, dto.academicSessionId, 'queued', {
       action,
     });
-    await this.rankingQueue.publish(payload);
+    try {
+      await this.rankingQueue.publish(payload);
+    } catch (err) {
+      await this.trySetJobStatus(dto.classId, dto.academicSessionId, 'failed', {
+        action,
+        stage: 'enqueue',
+        error: (err as Error).message,
+      });
+      throw err;
+    }
     return {
       status: 'queued' as const,
       action,
@@ -132,7 +153,8 @@ export class RankingService {
         academicSessionId,
       );
 
-      // GENERATE হলে safety re-check — এর মধ্যে অন্য কেউ lock করলে skip
+      // GENERATE হলে দ্রুত skip — এর মধ্যে অন্য কেউ lock করলে ভারী হিসাব বাদ।
+      // (চূড়ান্ত ও নির্ভরযোগ্য check RollEngine-এর transaction-এর ভেতরে।)
       if (action === 'GENERATE') {
         const locked = await this.rankingLocksService.isLocked(
           classId,
@@ -147,16 +169,21 @@ export class RankingService {
         }
       }
 
-      const rankedList = await this.rankingEngine.buildCombinedRanking(
+      const ranked = await this.rankingEngine.buildCombinedRanking(
         classId,
         academicSessionId,
         admissionTestEnabled,
       );
 
-      // STEP 2-এ pass — roll queue-তে rankedList সহ পাঠাই
+      // STEP 2-এ pass — RollEngine-এর যতটা দরকার ততটুকুই পাঠাই (message ছোট রাখে)
+      const rankedList: RollListEntry[] = ranked.map((r) => ({
+        studentId: r.studentId,
+        rankPosition: r.rankPosition,
+        totalScore: r.totalScore,
+      }));
       await this.rollQueue.publish({ ...payload, rankedList });
     } catch (err) {
-      await this.setJobStatus(classId, academicSessionId, 'failed', {
+      await this.trySetJobStatus(classId, academicSessionId, 'failed', {
         action,
         stage: 'ranking',
         error: (err as Error).message,
@@ -176,46 +203,64 @@ export class RankingService {
       action,
       stage: 'roll',
     });
+
+    let result: Awaited<ReturnType<RollEngine['generateRolls']>>;
     try {
-      const result = await this.rollEngine.generateRolls(
-        { classId, academicSessionId, sectionId: payload.sectionId ?? undefined },
+      result = await this.rollEngine.generateRolls(
+        { classId, academicSessionId },
         rankedList,
         triggeredBy,
         action === 'GENERATE'
           ? RankingAction.GENERATE
           : RankingAction.RECALCULATE,
       );
-
-      await this.setJobStatus(classId, academicSessionId, 'completed', {
-        action,
-        version: result.version,
-        studentCount: result.studentCount,
-      });
     } catch (err) {
-      await this.setJobStatus(classId, academicSessionId, 'failed', {
+      await this.trySetJobStatus(classId, academicSessionId, 'failed', {
         action,
         stage: 'roll',
         error: (err as Error).message,
       });
       throw err;
     }
+
+    // ⚠️ এই বিন্দুর পরে transaction commit হয়ে গেছে — কাজ সম্পন্ন। status লেখা
+    // ব্যর্থ হলে throw করা যাবে না, কারণ তাহলে RabbitMQ পুরো roll job আবার
+    // চালাবে এবং একই ডেটার আরেকটা version তৈরি হবে। status হারানো তুচ্ছ ক্ষতি;
+    // কাজ দুইবার হওয়া নয়।
+    await this.trySetJobStatus(
+      classId,
+      academicSessionId,
+      'completed',
+      result.skipped
+        ? { action, skipped: 'already-locked' }
+        : {
+            action,
+            version: result.version,
+            studentCount: result.studentCount,
+          },
+    );
   }
+
   /** শুধু unlock (regenerate ছাড়া)। */
   async unlock(classId: string, academicSessionId: string, actorId: string) {
     await this.loadClassAndSession(classId, academicSessionId);
-    const lock = await this.rankingLocksService.unlock(
-      classId,
-      academicSessionId,
-    );
-    await this.dataSource.transaction((manager) =>
-      this.rankingRepository.logAudit(manager, {
+    // unlock ও তার audit log একই transaction-এ — audit লেখা ব্যর্থ হলে unlock-ও
+    // rollback হবে, তাই "কে খুলল" রেকর্ড ছাড়া কখনো খোলা থাকে না।
+    const lock = await this.dataSource.transaction(async (manager) => {
+      const updated = await this.rankingLocksService.unlock(
+        classId,
+        academicSessionId,
+        manager,
+      );
+      await this.rankingRepository.logAudit(manager, {
         action: RankingAction.UNLOCK,
         classId,
         academicSessionId,
         actorId,
         detail: { context: 'manual-unlock' },
-      }),
-    );
+      });
+      return updated;
+    });
     return { message: 'Ranking unlocked', lock };
   }
 
@@ -286,6 +331,7 @@ export class RankingService {
   /**
    * দুই queue-এর DLQ-তে পার্ক হওয়া ব্যর্থ job-গুলো non-destructive ভাবে দেখায়
    * (সব retry শেষ হওয়ার পরও যেগুলো ব্যর্থ)। শুধু inspect — কিছু মুছে/সরায় না।
+   * `total`/`truncated` দেখে বোঝা যায় limit-এ কাটা পড়েছে কিনা।
    */
   async getDeadLetters() {
     const [ranking, roll] = await Promise.all([
@@ -293,8 +339,9 @@ export class RankingService {
       this.rabbitmq.peekDlq(ROLL_QUEUE),
     ]);
     return {
-      ranking: { queue: RANKING_QUEUE, count: ranking.length, messages: ranking },
-      roll: { queue: ROLL_QUEUE, count: roll.length, messages: roll },
+      ranking,
+      roll,
+      total: ranking.total + roll.total,
     };
   }
 
@@ -335,6 +382,28 @@ export class RankingService {
       value,
       86400,
     );
+  }
+
+  /**
+   * status লেখার best-effort সংস্করণ — কখনো throw করে না।
+   *
+   * দুই জায়গায় দরকার: (১) `catch` ব্লকের ভেতরে — Redis down থাকলে এই লেখাটাই
+   * throw করে আসল error ঢেকে দিত; (২) কাজ commit হয়ে যাওয়ার পরে — তখন throw
+   * করলে অকারণে পুরো job retry হতো।
+   */
+  private async trySetJobStatus(
+    classId: string,
+    academicSessionId: string,
+    status: RankingJobStatus,
+    extra: Record<string, unknown> = {},
+  ): Promise<void> {
+    try {
+      await this.setJobStatus(classId, academicSessionId, status, extra);
+    } catch (err) {
+      this.logger.warn(
+        `job status (${status}) লেখা যায়নি ${classId}/${academicSessionId}: ${(err as Error).message}`,
+      );
+    }
   }
 
   /** class + session আছে কিনা যাচাই; session-এর admissionTestEnabled ফেরত দেয়। */

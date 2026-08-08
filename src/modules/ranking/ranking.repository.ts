@@ -11,20 +11,23 @@ import { RankingAction } from './entities/ranking-audit-log.entity';
 import { RankingAuditLog } from './entities/ranking-audit-log.entity';
 import { RankingHistory } from './entities/ranking-history.entity';
 
+// ⚠️ date/timestamp কলাম `string` নয় — pg (pg-types) DATE/TIMESTAMP-কে JS `Date`
+// object-এ parse করে, আর TypeORM সেটা override করে না। raw query ও getRawMany
+// দুটোতেই তাই `Date` আসে। ভুল টাইপ লিখলে `!==` তুলনা reference মেলাতে শুরু করে।
 export interface MeritRow {
   student_id: string;
   total_score: string;
   final_score: string;
   midterm_score: string;
-  admission_date: string | null;
-  enrollment_created_at: string;
+  admission_date: string | Date | null;
+  enrollment_created_at: string | Date;
   rank_position: string;
 }
 
 export interface NewStudentRow {
   student_id: string;
-  admission_date: string | null;
-  enrollment_created_at: string;
+  admission_date: string | Date | null;
+  enrollment_created_at: string | Date;
 }
 
 export interface SectionRow {
@@ -179,9 +182,16 @@ export class RankingRepository {
     ]);
   }
 
-  /** student_enrollments-এ roll_number + section_id বসায়। true = update হয়েছে। */
+  /**
+   * student_enrollments-এ roll_number + section_id বসায়। true = update হয়েছে।
+   *
+   * `class_id` শর্তেও রাখা আছে: rankedList তৈরি হওয়ার পর (STEP 1) আর roll বসানোর
+   * (STEP 2) মাঝে ছাত্র অন্য ক্লাসে সরে গেলে যাতে ভুল ক্লাসের enrollment-এ roll
+   * না বসে। তখন affected = 0 হবে, আর ছাত্রটি snapshot-এও যাবে না।
+   */
   async assignRollAndSection(
     manager: EntityManager,
+    classId: string,
     academicSessionId: string,
     studentId: string,
     rollNumber: number,
@@ -195,6 +205,7 @@ export class RankingRepository {
       .andWhere('academic_session_id = :academicSessionId', {
         academicSessionId,
       })
+      .andWhere('class_id = :classId', { classId })
       .andWhere('deleted_at IS NULL')
       .execute();
     return (result.affected ?? 0) > 0;

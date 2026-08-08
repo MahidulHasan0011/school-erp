@@ -3,7 +3,9 @@ import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Min } from 'class-validator';
 
 export class HistoryQueryDto {
-  @ApiPropertyOptional({ description: 'নির্দিষ্ট version-এর snapshot (না দিলে version list)' })
+  @ApiPropertyOptional({
+    description: 'নির্দিষ্ট version-এর snapshot (না দিলে version list)',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
